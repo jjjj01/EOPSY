@@ -1,0 +1,200 @@
+#! /bin/bash
+recursive=0
+upper=0
+lower=0
+sed=0
+
+
+#Recursive functions for lowercasing, uppercasing and transforming filenames according to sed patterns.
+
+#Recursive function for sed patterns. This function takes 2 arguments - first argument is a directory to which the function enters, second argument is the sed pattern.
+recsed() {
+#At the start of the recursive function, we enter the directory.
+cd $1
+#We then go through all the files in said directory. We change the names of all the actual files, and recursively go further in all the subdirectories.
+for file in *
+        do
+            if [ -f "$file" ]
+                then
+                #The arguments for the rename command are the sed pattern, always provided as the second argument of the recsed function, and the name of the file we want to rename.
+                rename $2 $file
+            fi
+            if [ -d "$file" ]
+                then
+                #The arguments for the recsed command are the name of the directory we want to enter and the sed pattern, always provided as the second argument of the recsed function.
+                recsed $file $2
+            fi
+        done
+
+cd ..
+}
+
+
+#Recursive function for uppercasing filenames. This function takes one argument - the directory to which the function enters.
+recupper() {
+cd $1
+for file in *
+        do
+            if [ -f "$file" ]
+                then
+                #There are 2 arguments for the rename command - the pattern for uppercasing the filenames, and the name of the file.
+                rename 'y/a-z/A-Z/' $file
+            fi
+            if [ -d "$file" ]
+                then
+                #There is only one argument for the recupper function - the name of the directory we want to enter.
+                recupper $file
+            fi
+        done
+
+cd ..
+}
+
+#Recursive function for lowercasing filenames. This function takes one argument - the directory to which the function enters.
+reclower() {
+cd $1
+#Arguments for rename and reclower in this function work analogically to the ones for the recupper function.
+for file in *
+        do
+            if [ -f "$file" ]
+                then
+                rename 'y/A-Z/a-z/' $file
+            fi
+            if [ -d "$file" ]
+                then
+                reclower $file
+            fi
+        done
+
+cd ..
+}
+
+
+
+#Checking if there are any arguments at all.
+if [ -z $1 ]
+then
+echo "There are no arguments for the modify command. Provide correct arguments for the command to take action."
+exit
+fi
+
+
+#Going through all the input arguments and setting the respective vakuables to correct values, also checking if the provided arguments are correct.
+for i
+do
+
+#Saving the name if the argument is detected to be the name of a file or a folder.
+if [ -d "${i}" ]
+then
+name="$i"
+fi
+
+if [ -f "${i}" ]
+then 
+name="$i"
+fi
+
+#Going through input arguments and working appropriately, changing valuable to indicate what kind of transformation we will be doing.
+case "$i" in
+    -h)
+    echo "Command modify allows to change filenames in the given directory, with the possibility to change names of all the files in the directory and its subdirectories."
+    echo "modify [-u|-l] - Allows to choose between lowercasing the names or uppercasing them. Choosing both results in an error."
+    echo "modify [-h] - Lists the description of the command, which is what is currently on your screen."
+    echo "modify [-r] - Enables the recursive changes of filenames in all the subdirectories"
+    exit;;
+    -r)
+    recursive=1;;
+    -l)
+    lower=1;;
+    -u)
+    upper=1;;
+    #In this part we check if the argument is a sed pattern - if it has 3 slashes in it. If so, we save it as "pattern" and change the variable "sed" to 1, to mark the fact that the transformation that will be taking part is the sed pattern one.
+    */*/*/*)
+    sed=1
+    pattern="$i";;
+    #This part only launches if the argument doesn't fulfill any of the above criteria, so it may be incorrect.
+    *)
+    #We check if the argument is not a file or a directory, in which case it would be correct. If it's not, we output an appropriate error message along with the modify -h page and exit the program.
+    if [ ! -f "${i}" ] && [ ! -d "${i}" ]
+    then
+    echo "One or more of the arguments is invalid. Check the syntax of the used command"
+    echo ""
+    ./modify -h
+    fi;;
+esac
+done
+
+
+#Checking if the user tried to recursively go through a file instead of a directory, in which case nothing happens and we notify the user that it's impossible.
+if [ $recursive -eq 1 ] && [ -f $name ]
+then
+echo "You can't recursively rename files under a file. Either rename just a file without argument -r or choose a directory to recursively rename everything under it."
+echo ""
+./modify -h
+fi
+
+
+#The part of the program where the uppercasing transformation takes place.
+if [ $upper -eq 1 ]
+    then
+    #Here we check if both of the -l and -u arguments were inputted. If so, transformation is impossible. We provide an appropriate error code along with the -h page and exit the program.
+    if [ $lower -eq 1 ]
+        then
+        echo "Too many parameters. Names can only be lower-cased or upper-cased"
+        echo ""
+        ./modify -h
+    fi
+    #Here we check if the changes need to be recursive. If so, we enter the folder in which the changes will take place and run a separate function recupper, designed for that purpose.
+    if [ $recursive -eq 1 ]
+        then
+        cd $name
+        recupper $(pwd)
+        else
+        #Here is the non-recursive uppercasing transformation. We check if the file we want to change the name of is an actually existing file, and if it is we uppercase its name.
+        if [ -f $name ]
+            then
+            rename 'y/a-z/A-Z/' $name
+        fi
+    fi
+fi
+
+#The part of the program where the lowercasing transformation takes place. We don't need to check if both -u and -l arguments were inputted together, because we already checked that in the uppercasing transformation part.
+if [ $lower -eq 1 ]
+    then
+    #Here we check if the changes need to be recursive. If so, we enter the folder in which the changes will take place and run a separate function reclower, designed for that purpose.
+    if [ $recursive -eq 1 ]
+        then
+        cd $name
+        reclower $(pwd)
+        else
+        #Here is the non-recursive lowercasing transformation. We check if the file we want to change the name of is an actually existing file, and if it is we lowercase its name.
+        if [ -f $name ]
+            then
+            rename 'y/A-Z/a-z/' $name
+        fi
+    fi
+fi
+
+#The part of the program where transformation according to the sed pattern takes place.
+if [ $sed -eq 1 ] 
+    then
+    #Here we check if any of -l or -u arguments were inputted - if so, transformation according to the sed pattern is impossible. We provide an appropriate error code along with the -h page and exit the program.
+    if [ $lower -eq 1 ] || [ $upper -eq 1 ]
+        then
+        echo "Either provide the sed pattern, or choose [-u|-l]"
+        echo ""
+        ./modify -h
+    fi
+    #Here we check if the changes according to the sed pattern need to be recursive. If so, we enter the folder in which the changes will take place and run a separate function recsed, designed for that purpose.
+    if [ $recursive -eq 1 ]
+        then
+        cd $name
+        recsed $(pwd) $pattern
+        else
+        #Here is the non-recursive transformation according to the sed pattern. We check if the file we want to change the name of is an actually existing file, and if it is we change its name according to the sed pattern provided via the command line.
+        if [ -f $name ]
+            then
+            rename $pattern $name
+        fi
+    fi
+fi
